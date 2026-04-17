@@ -75,6 +75,18 @@ Or use the helper script:
 bash run_qwen3guard_orbench.sh
 ```
 
+The helper script defaults to memory-safer settings:
+
+- `BATCH_SIZE=1`
+- `MAX_NEW_TOKENS=16`
+- `TORCH_DTYPE=bfloat16`
+
+You can override them:
+
+```bash
+BATCH_SIZE=2 MAX_NEW_TOKENS=32 bash run_qwen3guard_orbench.sh
+```
+
 Llama Guard 4:
 
 ```bash
@@ -88,6 +100,12 @@ Or use the helper script:
 
 ```bash
 bash run_llama_guard_4_orbench.sh
+```
+
+You can override the helper script defaults the same way:
+
+```bash
+BATCH_SIZE=2 MAX_NEW_TOKENS=32 bash run_llama_guard_4_orbench.sh
 ```
 
 If you downloaded the models locally, pass the local directory to `--model`.

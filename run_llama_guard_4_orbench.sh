@@ -5,8 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODEL_PATH="${SCRIPT_DIR}/Llama-Guard-4-12B"
 DATA_DIR="${SCRIPT_DIR}/or-bench"
 OUTPUT_DIR="${SCRIPT_DIR}/results/llama_guard_4_12b"
+BATCH_SIZE="${BATCH_SIZE:-1}"
+MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-16}"
+TORCH_DTYPE="${TORCH_DTYPE:-bfloat16}"
+DEVICE_MAP="${DEVICE_MAP:-auto}"
 
-python "${SCRIPT_DIR}/evaluate_guard_models_orbench.py" \
+python3 "${SCRIPT_DIR}/evaluate_guard_models_orbench.py" \
   --model "${MODEL_PATH}" \
   --model-type llama-guard-4 \
   --input-files \
@@ -14,4 +18,8 @@ python "${SCRIPT_DIR}/evaluate_guard_models_orbench.py" \
     "${DATA_DIR}/or-bench-hard-1k.csv" \
     "${DATA_DIR}/or-bench-toxic.csv" \
   --output-dir "${OUTPUT_DIR}" \
+  --batch-size "${BATCH_SIZE}" \
+  --max-new-tokens "${MAX_NEW_TOKENS}" \
+  --torch-dtype "${TORCH_DTYPE}" \
+  --device-map "${DEVICE_MAP}" \
   "$@"
