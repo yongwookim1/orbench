@@ -359,19 +359,21 @@ class LlamaGuard4Runner(BaseGuardRunner):
         trust_remote_code: bool,
     ) -> None:
         import torch
-        from transformers import AutoProcessor, Llama4ForConditionalGeneration
+        from transformers import AutoModelForCausalLM, AutoTokenizer
 
         torch_dtype = self._resolve_dtype(torch, torch_dtype_name)
-        self.processor = AutoProcessor.from_pretrained(
+        self.tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             trust_remote_code=trust_remote_code,
         )
-        self.model = Llama4ForConditionalGeneration.from_pretrained(
+        self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             torch_dtype=torch_dtype,
             device_map=device_map,
             trust_remote_code=trust_remote_code,
         )
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
     @staticmethod
     def _resolve_dtype(torch_module: Any, name: str) -> Any:
@@ -384,19 +386,14 @@ class LlamaGuard4Runner(BaseGuardRunner):
         }
         return mapping[name]
 
-    def _build_conversation(self, prompt: str) -> list[dict[str, Any]]:
-        return [
-            {
-                "role": "user",
-                "content": [{"type": "text", "text": prompt}],
-            }
-        ]
+    def _build_conversation(self, prompt: str) -> list[dict[str, str]]:
+        return [{"role": "user", "content": prompt}]
 
     def generate(self, prompts: list[str], max_new_tokens: int) -> list[str]:
         conversations = [self._build_conversation(prompt) for prompt in prompts]
-        rendered_prompts = render_chat_template_batch(self.processor, conversations)
-        model_inputs = self.processor(
-            text=rendered_prompts,
+        rendered_prompts = render_chat_template_batch(self.tokenizer, conversations)
+        model_inputs = self.tokenizer(
+            rendered_prompts,
             return_tensors="pt",
             padding=True,
         )
@@ -405,12 +402,13 @@ class LlamaGuard4Runner(BaseGuardRunner):
             **model_inputs,
             max_new_tokens=max_new_tokens,
             do_sample=False,
+            pad_token_id=self.tokenizer.pad_token_id,
         )
         output_ids = slice_generated_tokens(
             generated,
             model_inputs["attention_mask"],
         )
-        return self.processor.batch_decode(output_ids, skip_special_tokens=True)
+        return self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
 
 
 def build_runner(args: argparse.Namespace, model_type: str) -> BaseGuardRunner:
