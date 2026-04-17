@@ -18,6 +18,9 @@ The scoring rule is strict:
 
 - `evaluate_guard_models_orbench.py`: main evaluation CLI
 - `requirements.txt`: baseline Python dependencies
+- `environment.yml`: Conda environment spec
+- `run_qwen3guard_orbench.sh`: repo-relative Qwen3Guard run script
+- `run_llama_guard_4_orbench.sh`: repo-relative Llama Guard 4 run script
 
 ## Expected CSV format
 
@@ -42,10 +45,18 @@ Create an environment and install the baseline dependencies:
 pip install -r requirements.txt
 ```
 
+Or create the Conda environment directly:
+
+```bash
+conda env create -f environment.yml
+conda activate orbench
+```
+
 Notes:
 
 - Qwen3Guard requires a recent `transformers` stack.
 - Llama Guard 4 may require the preview Llama Guard 4 `transformers` build shown on the official model card.
+- If Llama Guard 4 does not load with the default environment, replace the installed `transformers` with Meta's preview build from the model card.
 
 ## Usage
 
@@ -58,6 +69,12 @@ python evaluate_guard_models_orbench.py \
   --output-dir results/qwen3guard_gen_8b
 ```
 
+Or use the helper script:
+
+```bash
+bash run_qwen3guard_orbench.sh
+```
+
 Llama Guard 4:
 
 ```bash
@@ -67,7 +84,22 @@ python evaluate_guard_models_orbench.py \
   --output-dir results/llama_guard_4_12b
 ```
 
+Or use the helper script:
+
+```bash
+bash run_llama_guard_4_orbench.sh
+```
+
 If you downloaded the models locally, pass the local directory to `--model`.
+
+The helper scripts assume this repo layout:
+
+- `./evaluate_guard_models_orbench.py`
+- `./Qwen3Guard-Gen-8B/`
+- `./Llama-Guard-4-12B/`
+- `./or-bench/or-bench-80k.csv`
+- `./or-bench/or-bench-hard-1k.csv`
+- `./or-bench/or-bench-toxic.csv`
 
 Small smoke test:
 

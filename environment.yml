@@ -1,0 +1,18 @@
+name: orbench
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pytorch
+  - torchvision
+  - torchaudio
+  - pytorch-cuda=12.1
+  - pip:
+      - accelerate
+      - sentencepiece
+      - safetensors
+      - transformers>=4.51.0
