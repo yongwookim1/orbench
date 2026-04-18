@@ -420,7 +420,7 @@ class LlamaGuard4Runner(BaseGuardRunner):
             max_new_tokens=max_new_tokens,
             do_sample=False,
             pad_token_id=self.tokenizer.pad_token_id,
-            cache_implementation="dynamic",
+            use_cache=False,
         )
         output_ids = slice_generated_tokens(
             generated,
