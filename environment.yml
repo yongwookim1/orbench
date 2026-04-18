@@ -7,6 +7,8 @@ channels:
 dependencies:
   - python=3.11
   - pip
+  - pillow
+  - libtiff
   - pytorch
   - torchvision
   - torchaudio
@@ -15,4 +17,5 @@ dependencies:
       - accelerate
       - sentencepiece
       - safetensors
-      - transformers>=4.51.0
+      - hf_xet
+      - git+https://github.com/huggingface/transformers@v4.51.3-LlamaGuard-preview
