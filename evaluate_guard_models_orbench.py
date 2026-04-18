@@ -284,6 +284,18 @@ class BaseGuardRunner:
     def generate(self, prompts: list[str], max_new_tokens: int) -> list[str]:
         raise NotImplementedError
 
+    @staticmethod
+    def _build_model_load_kwargs(
+        dtype_value: Any,
+        device_map: str,
+        trust_remote_code: bool,
+    ) -> dict[str, Any]:
+        return {
+            "dtype": dtype_value,
+            "device_map": device_map,
+            "trust_remote_code": trust_remote_code,
+        }
+
 
 class Qwen3GuardRunner(BaseGuardRunner):
     model_type = "qwen3guard"
@@ -305,9 +317,11 @@ class Qwen3GuardRunner(BaseGuardRunner):
         )
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch_dtype,
-            device_map=device_map,
-            trust_remote_code=trust_remote_code,
+            **self._build_model_load_kwargs(
+                dtype_value=torch_dtype,
+                device_map=device_map,
+                trust_remote_code=trust_remote_code,
+            ),
         )
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -340,6 +354,7 @@ class Qwen3GuardRunner(BaseGuardRunner):
             max_new_tokens=max_new_tokens,
             do_sample=False,
             pad_token_id=self.tokenizer.pad_token_id,
+            cache_implementation="dynamic",
         )
         output_ids = slice_generated_tokens(
             generated,
@@ -368,9 +383,11 @@ class LlamaGuard4Runner(BaseGuardRunner):
         )
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
-            torch_dtype=torch_dtype,
-            device_map=device_map,
-            trust_remote_code=trust_remote_code,
+            **self._build_model_load_kwargs(
+                dtype_value=torch_dtype,
+                device_map=device_map,
+                trust_remote_code=trust_remote_code,
+            ),
         )
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
@@ -403,6 +420,7 @@ class LlamaGuard4Runner(BaseGuardRunner):
             max_new_tokens=max_new_tokens,
             do_sample=False,
             pad_token_id=self.tokenizer.pad_token_id,
+            cache_implementation="dynamic",
         )
         output_ids = slice_generated_tokens(
             generated,
