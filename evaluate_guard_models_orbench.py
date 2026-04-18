@@ -23,6 +23,18 @@ DEFAULT_INPUT_FILES = (
     "or-bench-hard-1k.csv",
     "or-bench-toxic.csv",
 )
+LLAMA_GUARD_4_REQUIRED_FILES = (
+    "config.json",
+    "model.safetensors.index.json",
+    "preprocessor_config.json",
+    "processor_config.json",
+    "tokenizer.json",
+    "tokenizer_config.json",
+    "special_tokens_map.json",
+)
+LLAMA_GUARD_4_PREVIEW_INSTALL = (
+    'pip install "git+https://github.com/huggingface/transformers@v4.51.3-LlamaGuard-preview" hf_xet'
+)
 
 QWEN_LABEL_RE = re.compile(r"Safety:\s*(Safe|Unsafe|Controversial)\b", re.IGNORECASE)
 QWEN_CATEGORIES_RE = re.compile(
@@ -144,6 +156,38 @@ def safe_package_version(package_name: str) -> str | None:
         return importlib.metadata.version(package_name)
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def resolve_local_model_dir(model_name: str) -> Path | None:
+    candidate = Path(model_name).expanduser()
+    if candidate.exists() and candidate.is_dir():
+        return candidate.resolve()
+    return None
+
+
+def preflight_check_llama_guard4(model_name: str) -> None:
+    local_model_dir = resolve_local_model_dir(model_name)
+    if local_model_dir is not None:
+        missing = [
+            required_name
+            for required_name in LLAMA_GUARD_4_REQUIRED_FILES
+            if not (local_model_dir / required_name).exists()
+        ]
+        if missing:
+            formatted = "\n".join(f"- {name}" for name in missing)
+            raise RuntimeError(
+                "The local Llama Guard 4 directory is missing required files:\n"
+                f"{formatted}\n"
+                "Re-download the full model snapshot before retrying."
+            )
+
+    try:
+        from transformers import AutoProcessor, Llama4ForConditionalGeneration  # noqa: F401
+    except Exception as exc:
+        raise RuntimeError(
+            "The installed Transformers stack cannot import the official Llama Guard 4 classes. "
+            f"Install the preview build with:\n{LLAMA_GUARD_4_PREVIEW_INSTALL}"
+        ) from exc
 
 
 def dump_json(path: Path, payload: Any, pretty: bool) -> None:
@@ -374,21 +418,32 @@ class LlamaGuard4Runner(BaseGuardRunner):
         trust_remote_code: bool,
     ) -> None:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoProcessor, Llama4ForConditionalGeneration
 
+        preflight_check_llama_guard4(model_name)
         torch_dtype = self._resolve_dtype(torch, torch_dtype_name)
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
-            trust_remote_code=trust_remote_code,
-        )
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            **self._build_model_load_kwargs(
-                dtype_value=torch_dtype,
-                device_map=device_map,
+        try:
+            self.processor = AutoProcessor.from_pretrained(
+                model_name,
                 trust_remote_code=trust_remote_code,
-            ),
-        )
+            )
+            self.model = Llama4ForConditionalGeneration.from_pretrained(
+                model_name,
+                **self._build_model_load_kwargs(
+                    dtype_value=torch_dtype,
+                    device_map=device_map,
+                    trust_remote_code=trust_remote_code,
+                ),
+            )
+        except Exception as exc:
+            raise RuntimeError(self._format_runtime_error(exc)) from exc
+
+        self.tokenizer = getattr(self.processor, "tokenizer", None)
+        if self.tokenizer is None:
+            raise RuntimeError(
+                "AutoProcessor loaded, but no tokenizer was attached. "
+                f"Install the preview build with:\n{LLAMA_GUARD_4_PREVIEW_INSTALL}"
+            )
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
@@ -403,30 +458,81 @@ class LlamaGuard4Runner(BaseGuardRunner):
         }
         return mapping[name]
 
-    def _build_conversation(self, prompt: str) -> list[dict[str, str]]:
-        return [{"role": "user", "content": prompt}]
+    @staticmethod
+    def _format_runtime_error(exc: Exception) -> str:
+        detail = f"{type(exc).__name__}: {exc}"
+        if any(
+            marker in detail
+            for marker in (
+                "attention_chunk_size",
+                "sliding_window",
+                "preprocessor_config",
+                "processor_config",
+                "DynamicCache",
+                "StaticCache",
+            )
+        ):
+            return (
+                "Llama Guard 4 failed under the current Transformers runtime. "
+                "Use the official multimodal loading path and install the preview build with:\n"
+                f"{LLAMA_GUARD_4_PREVIEW_INSTALL}\n"
+                f"Original error: {detail}"
+            )
+        return (
+            "Failed to initialize or run Llama Guard 4 with the official multimodal loading path. "
+            f"Original error: {detail}"
+        )
+
+    def _build_conversation(self, prompt: str) -> list[dict[str, Any]]:
+        return [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": prompt}],
+            }
+        ]
+
+    def _prepare_inputs(self, prompt: str) -> Any:
+        conversation = self._build_conversation(prompt)
+        try:
+            return self.processor.apply_chat_template(
+                conversation,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_dict=True,
+                return_tensors="pt",
+            )
+        except TypeError:
+            rendered_prompt = self.processor.apply_chat_template(
+                conversation,
+                add_generation_prompt=True,
+                tokenize=False,
+            )
+            return self.processor(
+                text=rendered_prompt,
+                return_tensors="pt",
+            )
 
     def generate(self, prompts: list[str], max_new_tokens: int) -> list[str]:
-        conversations = [self._build_conversation(prompt) for prompt in prompts]
-        rendered_prompts = render_chat_template_batch(self.tokenizer, conversations)
-        model_inputs = self.tokenizer(
-            rendered_prompts,
-            return_tensors="pt",
-            padding=True,
-        )
-        model_inputs = model_inputs.to(resolve_model_device(self.model))
-        generated = self.model.generate(
-            **model_inputs,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-            pad_token_id=self.tokenizer.pad_token_id,
-            use_cache=False,
-        )
-        output_ids = slice_generated_tokens(
-            generated,
-            model_inputs["attention_mask"],
-        )
-        return self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+        outputs: list[str] = []
+        for prompt in prompts:
+            model_inputs = self._prepare_inputs(prompt)
+            model_inputs = model_inputs.to(resolve_model_device(self.model))
+            try:
+                generated = self.model.generate(
+                    **model_inputs,
+                    max_new_tokens=max_new_tokens,
+                    do_sample=False,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                )
+            except Exception as exc:
+                raise RuntimeError(self._format_runtime_error(exc)) from exc
+            output_ids = slice_generated_tokens(
+                generated,
+                model_inputs["attention_mask"],
+            )
+            decoded = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)
+            outputs.append(decoded[0] if decoded else "")
+        return outputs
 
 
 def build_runner(args: argparse.Namespace, model_type: str) -> BaseGuardRunner:

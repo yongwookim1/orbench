@@ -55,8 +55,13 @@ conda activate orbench
 Notes:
 
 - Qwen3Guard requires a recent `transformers` stack.
-- Llama Guard 4 may require the preview Llama Guard 4 `transformers` build shown on the official model card.
-- If Llama Guard 4 does not load with the default environment, replace the installed `transformers` with Meta's preview build from the model card.
+- Llama Guard 4 should use the official preview Llama Guard 4 `transformers` build in the same environment.
+- To upgrade the existing environment for Llama Guard 4, run:
+
+```bash
+pip uninstall -y transformers
+pip install "git+https://github.com/huggingface/transformers@v4.51.3-LlamaGuard-preview" hf_xet
+```
 
 ## Usage
 
