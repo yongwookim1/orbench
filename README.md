@@ -5,6 +5,7 @@ This repository evaluates prompt-only safety guard models on OR-Bench CSV files.
 It is designed for:
 
 - `Qwen/Qwen3Guard-Gen-8B`
+- `google/shieldgemma-2b`
 - `meta-llama/Llama-Guard-4-12B`
 
 The scoring rule is strict:
@@ -20,6 +21,7 @@ The scoring rule is strict:
 - `requirements.txt`: baseline Python dependencies
 - `environment.yml`: Conda environment spec
 - `run_qwen3guard_orbench.sh`: repo-relative Qwen3Guard run script
+- `run_shieldgemma_orbench.sh`: repo-relative ShieldGemma run script
 - `run_llama_guard_4_orbench.sh`: repo-relative Llama Guard 4 run script
 
 ## Expected CSV format
@@ -92,6 +94,32 @@ You can override them:
 BATCH_SIZE=2 MAX_NEW_TOKENS=32 bash run_qwen3guard_orbench.sh
 ```
 
+ShieldGemma:
+
+```bash
+python evaluate_guard_models_orbench.py \
+  --model google/shieldgemma-2b \
+  --model-type shieldgemma \
+  --output-dir results/shieldgemma_2b
+```
+
+Or use the helper script:
+
+```bash
+bash run_shieldgemma_orbench.sh
+```
+
+ShieldGemma is run in scoring mode against `Yes` / `No`:
+
+- `No` -> `safe`
+- `Yes` -> `unsafe`
+
+The helper script defaults are:
+
+- `BATCH_SIZE=8`
+- `MAX_NEW_TOKENS=1`
+- `TORCH_DTYPE=bfloat16`
+
 Llama Guard 4:
 
 ```bash
@@ -119,6 +147,7 @@ The helper scripts assume this repo layout:
 
 - `./evaluate_guard_models_orbench.py`
 - `./Qwen3Guard-Gen-8B/`
+- `./shieldgemma-2b/`
 - `./Llama-Guard-4-12B/`
 - `./or-bench/or-bench-80k.csv`
 - `./or-bench/or-bench-hard-1k.csv`
@@ -180,6 +209,11 @@ or:
 unsafe
 S9
 ```
+
+ShieldGemma prompt moderation is scored from the next-token decision:
+
+- `Yes` means the prompt violates the policy -> `unsafe`
+- `No` means the prompt does not violate the policy -> `safe`
 
 ## Important runtime notes
 
