@@ -54,11 +54,13 @@ conda activate orbench
 
 Notes:
 
-- `environment.yml` now installs the preview Llama Guard 4 `transformers` build in the same environment.
-- Recreate or update the existing environment after pulling the latest repo changes:
+- Qwen3Guard requires a recent `transformers` stack.
+- Llama Guard 4 should use the official preview Llama Guard 4 `transformers` build in the same environment.
+- To upgrade the existing environment for Llama Guard 4, run:
 
 ```bash
-conda env update -f environment.yml --prune
+pip uninstall -y transformers
+pip install "git+https://github.com/huggingface/transformers@v4.51.3-LlamaGuard-preview" hf_xet
 ```
 
 ## Usage
